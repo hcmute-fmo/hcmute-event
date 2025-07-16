@@ -1,3 +1,4 @@
+import apiClient from "@/lib/client";
 import { supabase } from "@/lib/supabase";
 
 export interface UploadProgress {
@@ -24,8 +25,8 @@ export const uploadFile = async (
             throw new Error('Chỉ chấp nhận file hình ảnh');
         }
 
-        // Validate file size (5MB max)
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        // Validate file size (50MB max)
+        const maxSize = 50 * 1024 * 1024; // 50MB
         if (file.size > maxSize) {
             throw new Error('Kích thước file không được vượt quá 5MB');
         }
@@ -129,8 +130,8 @@ export const validateImageFile = (file: File): string | null => {
         return 'Chỉ chấp nhận file hình ảnh';
     }
 
-    // Check file size (5MB max)
-    const maxSize = 5 * 1024 * 1024;
+    // Check file size (50MB max)
+    const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
         return 'Kích thước file không được vượt quá 5MB';
     }
@@ -142,4 +143,9 @@ export const validateImageFile = (file: File): string | null => {
     }
 
     return null;
+};
+
+export const convertRawUrlToImageUrl = async (rawUrl: string) => {
+    const url = await apiClient.post("/images/process-drive-url", { drive_url: rawUrl });
+    return url.data;
 };

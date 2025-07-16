@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { UserFormModal } from "@/components/ui/user-form-modal";
+import { UserImportModal } from "@/components/ui/user-import-modal";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Eye, Edit, Trash2 } from "lucide-react";
+import { Eye, Edit, Trash2, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "@/types/user";
 import type { Column, RowAction, TableAction, PaginationInfo, TableFilters, SortConfig } from "@/types/table";
@@ -32,6 +34,7 @@ export default function ManageUserPage() {
     const [userModalOpen, setUserModalOpen] = useState(false);
     const [userModalMode, setUserModalMode] = useState<"create" | "update" | "view">("create");
     const [selectedUser, setSelectedUser] = useState<User | undefined>();
+    const [importModalOpen, setImportModalOpen] = useState(false);
     const [confirmationModal, setConfirmationModal] = useState<{
         open: boolean;
         title: string;
@@ -158,7 +161,7 @@ export default function ManageUserPage() {
                 totalPages: response.totalPages,
             }));
         } catch (error) {
-            toast.error("Lỗi khi tải danh sách người dùng");
+            toast.error("Lỗi khi tải danh sách người dùng", { position: "bottom-center" });
             console.error(error);
         } finally {
             setLoading(false);
@@ -168,10 +171,10 @@ export default function ManageUserPage() {
     const handleDeleteUser = async (userId: string) => {
         try {
             await deleteUser(userId);
-            toast.success("Xóa người dùng thành công");
+            toast.success("Xóa người dùng thành công", { position: "bottom-center" });
             fetchUsers();
         } catch (error) {
-            toast.error("Lỗi khi xóa người dùng");
+            toast.error("Lỗi khi xóa người dùng", { position: "bottom-center" });
             console.error(error);
         }
     };
@@ -179,10 +182,10 @@ export default function ManageUserPage() {
     const handleDeleteMultipleUsers = async (userIds: string[]) => {
         try {
             await deleteUsers(userIds);
-            toast.success(`Xóa ${userIds.length} người dùng thành công`);
+            toast.success(`Xóa ${userIds.length} người dùng thành công`, { position: "bottom-center" });
             fetchUsers();
         } catch (error) {
-            toast.error("Lỗi khi xóa người dùng");
+            toast.error("Lỗi khi xóa người dùng", { position: "bottom-center" });
             console.error(error);
         }
     };
@@ -223,6 +226,16 @@ export default function ManageUserPage() {
                         Quản lý tất cả người dùng trong hệ thống
                     </p>
                 </div>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={() => setImportModalOpen(true)}
+                        className="flex items-center gap-2"
+                    >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        Import từ Excel
+                    </Button>
+                </div>
             </div>
 
             <Card>
@@ -256,6 +269,12 @@ export default function ManageUserPage() {
                 onOpenChange={setUserModalOpen}
                 mode={userModalMode}
                 user={selectedUser}
+                onSuccess={handleUserFormSuccess}
+            />
+
+            <UserImportModal
+                open={importModalOpen}
+                onOpenChange={setImportModalOpen}
                 onSuccess={handleUserFormSuccess}
             />
 

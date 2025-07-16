@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { TableFilters } from "@/types/table";
 import type { User } from "@/types/user";
+import { batchFaceRegister, batchFaceUpdate } from "./face.service";
 
 export const createUser = async (userData: Omit<User, 'id' | 'created_at' | 'updated_at'>): Promise<User> => {
     const { data, error } = await supabase
@@ -8,7 +9,16 @@ export const createUser = async (userData: Omit<User, 'id' | 'created_at' | 'upd
         .insert([userData])
         .select()
         .single();
-
+    if (data) {
+        await batchFaceRegister({
+            users: [
+                {
+                    user_id: data.id,
+                    avatar_image_url: userData.avatar_image_url
+                }
+            ]
+        });
+    }
     if (error) throw error;
     return data;
 };
@@ -80,7 +90,14 @@ export const updateUser = async (id: string, userData: Partial<Omit<User, 'id' |
         .eq("id", id)
         .select()
         .single();
-
+    await batchFaceUpdate({
+        users: [
+            {
+                user_id: id,
+                avatar_image_url: userData.avatar_image_url || ""
+            }
+        ]
+    });
     if (error) throw error;
     return data;
 };

@@ -50,7 +50,7 @@ export function ImageUpload({
     const handleFileUpload = async (file: File) => {
         const validationError = validateImageFile(file);
         if (validationError) {
-            toast.error(validationError);
+            toast.error(validationError, { position: "bottom-center" });
             return;
         }
 
@@ -64,23 +64,25 @@ export function ImageUpload({
 
             const result = await uploadFile(
                 file,
+                "images",
                 "avatars",
-                "users",
                 (progressData) => {
                     setProgress(progressData);
                 }
             );
 
             if (result.error) {
-                toast.error(result.error);
+                toast.error(result.error, { position: "bottom-center" });
                 setPreview(value); // Revert to original
             } else {
                 onChange(result.url);
                 setPreview(result.url);
-                toast.success("Tải ảnh lên thành công");
+                toast.success("Tải ảnh lên thành công", {
+                    position: "bottom-center",
+                });
             }
         } catch (error: any) {
-            toast.error(error.message || "Lỗi khi tải ảnh lên");
+            toast.error(error.message || "Lỗi khi tải ảnh lên", { position: "bottom-center" });
             setPreview(value); // Revert to original
         } finally {
             setUploading(false);

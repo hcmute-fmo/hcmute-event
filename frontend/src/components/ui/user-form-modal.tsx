@@ -19,6 +19,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "@/types/user";
 import { createUser, updateUser } from "@/services/user.service";
+import { batchFaceDelete, batchFaceRegister, batchFaceUpdate } from "@/services/face.service";
 
 interface UserFormModalProps {
     open: boolean;
@@ -73,16 +74,18 @@ export function UserFormModal({
         try {
             if (mode === "create") {
                 await createUser(formData);
-                toast.success("Người dùng đã được tạo thành công");
+                toast.success("Người dùng đã được tạo thành công", { position: "bottom-center" });
+
             } else if (mode === "update" && user) {
                 await updateUser(user.id, formData);
-                toast.success("Người dùng đã được cập nhật thành công");
+
+                toast.success("Người dùng đã được cập nhật thành công", { position: "bottom-center" });
             }
 
             onSuccess?.();
             onOpenChange(false);
         } catch (error) {
-            toast.error(mode === "create" ? "Lỗi khi tạo người dùng" : "Lỗi khi cập nhật người dùng");
+            toast.error(mode === "create" ? "Lỗi khi tạo người dùng" : "Lỗi khi cập nhật người dùng", { position: "bottom-center" });
             console.error(error);
         } finally {
             setLoading(false);

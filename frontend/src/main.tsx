@@ -10,6 +10,7 @@ import DashboardPage from './pages/admin/DashboardPage'
 import ManageEventPage from './pages/admin/ManageEventPage'
 import ManageUserPage from './pages/admin/ManageUserPage'
 import EventDetailPage from './pages/admin/EventDetailPage'
+import TestPage from './pages/client/TestPage'
 import { Toaster } from "@/components/ui/sonner"
 
 createRoot(document.getElementById('root')!).render(
@@ -20,6 +21,8 @@ createRoot(document.getElementById('root')!).render(
       <Route element={<AuthLayout />}>
         <Route path="/dang-nhap" element={<LoginPage />} />
       </Route>
+
+      <Route path="/test" element={<TestPage />} />
 
       <Route path="/quan-ly/*" element={<DashboardLayout />}>
         <Route index element={<DashboardPage />} />
