@@ -124,6 +124,7 @@ class UserService:
                     user = supabase_anon.table('users').select('id').eq('id', user_request.user_id).execute()
                     if not user.data:
                         self._update_task_result(task_id, user_request.user_id, False, "User not found")
+                        self._update_task_progress(task_id, i + 1, len(users))
                         continue
                     
                     user_id = user.data[0]['id']
@@ -131,6 +132,7 @@ class UserService:
                     user_in_user_faces = supabase_service.table('user_faces').select('id').eq('user_id', user_id).execute()
                     if user_in_user_faces.data:
                         self._update_task_result(task_id, user_request.user_id, False, "User already has a face")
+                        self._update_task_progress(task_id, i + 1, len(users))
                         continue
                     
                     face_data = process_faces_image(user_request.avatar_image_url, include_embedding=True, single_face_only=True)
@@ -142,13 +144,14 @@ class UserService:
                     
                     if response.data:
                         self._update_task_result(task_id, user_request.user_id, True)
+                        self._update_task_progress(task_id, i + 1, len(users))
                     else:
                         self._update_task_result(task_id, user_request.user_id, False, "Failed to save face to database")
+                        self._update_task_progress(task_id, i + 1, len(users))
                         
                 except Exception as e:
                     self._update_task_result(task_id, user_request.user_id, False, str(e))
-                
-                self._update_task_progress(task_id, i + 1, len(users))
+                    self._update_task_progress(task_id, i + 1, len(users))
             
             self._update_task_status(task_id, "completed")
             
@@ -185,6 +188,36 @@ class UserService:
         
         return task_id
 
+    def batch_face_update_background(self, request: BatchFaceUpdateRequest) -> str:
+        task_id = str(uuid.uuid4())
+        
+        task_data = {
+            "task_id": task_id,
+            "status": "processing",
+            "progress": 0,
+            "total_items": len(request.users),
+            "completed_items": 0,
+            "failed_items": 0,
+            "results": [],
+            "error_message": None,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        try:
+            supabase_service.table('background_tasks').insert(task_data).execute()
+        except Exception:
+            pass
+        
+        thread = threading.Thread(
+            target=self._process_batch_face_update,
+            args=(task_id, request.users)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return task_id
+
     def _process_batch_face_delete(self, task_id: str, user_ids: List[str]):
         try:
             for i, user_id in enumerate(user_ids):
@@ -192,19 +225,65 @@ class UserService:
                     user_in_user_faces = supabase_service.table('user_faces').select('id').eq('user_id', user_id).execute()
                     if not user_in_user_faces.data:
                         self._update_task_result(task_id, user_id, False, "User does not have a face")
+                        self._update_task_progress(task_id, i + 1, len(user_ids))
                         continue
                     
                     response = supabase_service.table('user_faces').delete().eq('id', user_in_user_faces.data[0]['id']).execute()
                     
                     if response.data:
                         self._update_task_result(task_id, user_id, True)
+                        self._update_task_progress(task_id, i + 1, len(user_ids))
                     else:
                         self._update_task_result(task_id, user_id, False, "Failed to delete face")
+                        self._update_task_progress(task_id, i + 1, len(user_ids))
                         
                 except Exception as e:
                     self._update_task_result(task_id, user_id, False, str(e))
-                
-                self._update_task_progress(task_id, i + 1, len(user_ids))
+                    self._update_task_progress(task_id, i + 1, len(user_ids))
+            
+            self._update_task_status(task_id, "completed")
+            
+        except Exception as e:
+            self._update_task_status(task_id, "failed", str(e))
+
+    def _process_batch_face_update(self, task_id: str, users: List[UserFaceUpdateRequest]):
+        try:
+            for i, user_request in enumerate(users):
+                try:
+                    user = supabase_anon.table('users').select('id').eq('id', user_request.user_id).execute()
+                    if not user.data:
+                        self._update_task_result(task_id, user_request.user_id, False, "User not found")
+                        self._update_task_progress(task_id, i + 1, len(users))
+                        continue
+                    
+                    user_id = user.data[0]['id']
+                    
+                    user_in_user_faces = supabase_service.table('user_faces').select('id').eq('user_id', user_id).execute()
+                    face_data = process_faces_image(user_request.avatar_image_url, include_embedding=True, single_face_only=True)
+                    print(f"FACE DATA: {face_data}")
+                    
+                    if user_in_user_faces.data:
+                        # Update existing face record
+                        response = supabase_service.table('user_faces').update({
+                            'face_embedding': face_data["embedding"] if isinstance(face_data, dict) and "embedding" in face_data else []
+                        }).eq('id', user_in_user_faces.data[0]['id']).execute()
+                    else:
+                        # Insert new face record
+                        response = supabase_service.table('user_faces').insert({
+                            'user_id': user_id,
+                            'face_embedding': face_data["embedding"] if isinstance(face_data, dict) and "embedding" in face_data else []
+                        }).execute()
+                    
+                    if response.data:
+                        self._update_task_result(task_id, user_request.user_id, True)
+                        self._update_task_progress(task_id, i + 1, len(users))
+                    else:
+                        self._update_task_result(task_id, user_request.user_id, False, "Failed to update face in database")
+                        self._update_task_progress(task_id, i + 1, len(users))
+                        
+                except Exception as e:
+                    self._update_task_result(task_id, user_request.user_id, False, str(e))
+                    self._update_task_progress(task_id, i + 1, len(users))
             
             self._update_task_status(task_id, "completed")
             
@@ -340,6 +419,78 @@ class UserService:
         
         return task_id
 
+    def _start_face_registration_background(self, users_for_face_registration: List[dict]) -> str:
+        """Start face registration background task for existing users"""
+        task_id = str(uuid.uuid4())
+        
+        task_data = {
+            "task_id": task_id,
+            "status": "processing",
+            "progress": 0,
+            "total_items": len(users_for_face_registration),
+            "completed_items": 0,
+            "failed_items": 0,
+            "results": [],
+            "error_message": None,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        try:
+            supabase_service.table('background_tasks').insert(task_data).execute()
+        except Exception:
+            pass
+        
+        thread = threading.Thread(
+            target=self._process_face_registration_only,
+            args=(task_id, users_for_face_registration)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return task_id
+
+    def _process_face_registration_only(self, task_id: str, users: List[dict]):
+        """Process face registration for users that already exist"""
+        try:
+            for i, user_data in enumerate(users):
+                try:
+                    user_id = user_data["user_id"]
+                    avatar_image_url = user_data["avatar_image_url"]
+                    email = user_data["email"]
+                    
+                    # Check if user already has a face
+                    existing_face = supabase_service.table('user_faces').select('id').eq('user_id', user_id).execute()
+                    
+                    if existing_face.data:
+                        self._update_task_result(task_id, email, False, "User already has a face registered")
+                        self._update_task_progress(task_id, i + 1, len(users))
+                        continue
+                    
+                    # Process face image and create face entry
+                    face_data = process_faces_image(avatar_image_url, include_embedding=True, single_face_only=True)
+                    
+                    face_response = supabase_service.table('user_faces').insert({
+                        'user_id': user_id,
+                        'face_embedding': face_data["embedding"] if isinstance(face_data, dict) and "embedding" in face_data else []
+                    }).execute()
+                    
+                    if face_response.data:
+                        self._update_task_result(task_id, email, True)
+                        self._update_task_progress(task_id, i + 1, len(users))
+                    else:
+                        self._update_task_result(task_id, email, False, "Failed to save face to database")
+                        self._update_task_progress(task_id, i + 1, len(users))
+                        
+                except Exception as e:
+                    self._update_task_result(task_id, user_data.get("email", "unknown"), False, str(e))
+                    self._update_task_progress(task_id, i + 1, len(users))
+            
+            self._update_task_status(task_id, "completed")
+            
+        except Exception as e:
+            self._update_task_status(task_id, "failed", str(e))
+
     def _process_face_tagging(self, task_id: str, request: FaceTaggingRequest):
         start_time = time.time()
         try:
@@ -395,4 +546,5 @@ class UserService:
         except Exception as e:
             processing_time = time.time() - start_time
             self._update_task_result(task_id, str(request.image_id), False, str(e))
+            self._update_task_progress(task_id, 1, 1)
             self._update_task_status(task_id, "failed", str(e))

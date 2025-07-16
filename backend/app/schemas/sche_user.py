@@ -45,12 +45,20 @@ class BatchFaceRegisterRequest(BaseModel):
 class BatchFaceDeleteRequest(BaseModel):
     user_ids: List[str]
 
+class BatchFaceUpdateRequest(BaseModel):
+    users: List[UserFaceUpdateRequest]
+
 class BatchFaceRegisterResponse(BaseModel):
     task_id: str
     message: str
     total_users: int
 
 class BatchFaceDeleteResponse(BaseModel):
+    task_id: str
+    message: str
+    total_users: int
+
+class BatchFaceUpdateResponse(BaseModel):
     task_id: str
     message: str
     total_users: int
@@ -92,4 +100,5 @@ class FaceTaggingResult(BaseModel):
     recognized_users: List[str]
     processing_time: float
     status: str 
+
     

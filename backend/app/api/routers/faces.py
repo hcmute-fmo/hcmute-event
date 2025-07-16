@@ -77,6 +77,21 @@ def batch_face_delete(request: BatchFaceDeleteRequest, service: UserService = De
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+@router.post("/batch-update")
+def batch_face_update(request: BatchFaceUpdateRequest, service: UserService = Depends(
+    get_user_service
+)):
+    """Update multiple faces in background"""
+    try:
+        task_id = service.batch_face_update_background(request)
+        return BatchFaceUpdateResponse(
+            task_id=task_id,
+            message="Batch face update started in background",
+            total_users=len(request.users)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
 @router.get("/task-status/{task_id}")
 def get_task_status(task_id: str, service: UserService = Depends(
     get_user_service
@@ -102,85 +117,3 @@ def face_tagging(request: FaceTaggingRequest, service: UserService = Depends(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-
-# def save_face_background(request: UserFaceCreateRequest, service: UserService):
-#     try:
-#         service.save_face(request)
-#     except Exception as e:
-#         print(f"Background face saving failed: {str(e)}")
-
-# def auto_tag_users_background(request: AutoTagUsersRequest, service: UserService):
-#     try:
-#         service.auto_tag_users(request)
-#     except Exception as e:
-#         print(f"Background auto-tagging users failed: {str(e)}")
-
-# @router.post("/save")
-# def save_face(request: UserFaceCreateRequest, background_tasks: BackgroundTasks, service: UserService = Depends(get_user_service)):
-#     try:
-#         background_tasks.add_task(save_face_background, request, service)
-#         return {"message": "Face saving started in background", "user_id": request.user_id}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-# @router.post("/auto-tag-users")
-# def auto_tag_users(request: AutoTagUsersRequest, background_tasks: BackgroundTasks, service: UserService = Depends(get_user_service)):
-#     try:
-#         background_tasks.add_task(auto_tag_users_background, request, service)
-#         return {"message": "Auto-tagging users started in background", "event_id": request.event_id, "image_url": request.image_url}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-# @router.get("/auto-tag-results/{event_id}")
-# def get_auto_tag_results(event_id: int, image_url: str = Query(..., description="Image URL to get results for")):
-#     try:
-#         response = supabase.table('event_images').select('metadata').eq('event_id', event_id).eq('raw_image_url', image_url).execute()
-        
-#         if not response.data:
-#             raise HTTPException(status_code=404, detail="No results found for this event and image")
-        
-#         metadata = response.data[0].get('metadata', {})
-        
-#         if not metadata.get('face_search_completed'):
-#             return {"message": "Auto-tagging is still in progress", "status": "processing"}
-        
-#         return {
-#             "status": "completed",
-#             "user_ids": metadata.get('user_ids', []),
-#             "bounding_boxes_scores": metadata.get('bounding_boxes_scores', []),
-#             "total_faces_detected": metadata.get('total_faces_detected', 0),
-#             "timestamp": metadata.get('timestamp')
-#         }
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-# @router.post("/delete")
-# def delete_face(request: DeleteFaceRequest, service: UserService = Depends(get_user_service)):
-#     try:
-#         return service.delete_face(request)
-#     except ValueError as e:
-#         raise HTTPException(status_code=400, detail=str(e))
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-# @router.post("/update")
-# def update_face(request: UpdateFaceRequest, service: UserService = Depends(get_user_service)):
-#     try:
-#         return service.update_face(request)
-#     except ValueError as e:
-#         raise HTTPException(status_code=400, detail=str(e))
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-# @router.post("/bounding-boxes")
-# def get_face_bounding_boxes(request: FaceBoundingBoxRequest, service: UserService = Depends(get_user_service)):
-#     try:
-#         return service.get_face_bounding_boxes(request)
-#     except ValueError as e:
-#         raise HTTPException(status_code=400, detail=str(e))
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
