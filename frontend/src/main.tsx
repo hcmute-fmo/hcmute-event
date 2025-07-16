@@ -9,6 +9,7 @@ import LoginPage from './pages/auth/LoginPage'
 import DashboardPage from './pages/admin/DashboardPage'
 import ManageEventPage from './pages/admin/ManageEventPage'
 import ManageUserPage from './pages/admin/ManageUserPage'
+import EventDetailPage from './pages/admin/EventDetailPage'
 import { Toaster } from "@/components/ui/sonner"
 
 createRoot(document.getElementById('root')!).render(
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')!).render(
       <Route path="/quan-ly/*" element={<DashboardLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="su-kien" element={<ManageEventPage />} />
+        <Route path="su-kien/:id" element={<EventDetailPage />} />
         <Route path="nguoi-dung" element={<ManageUserPage />} />
       </Route>
     </Routes>

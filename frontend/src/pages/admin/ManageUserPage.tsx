@@ -1,47 +1,218 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Edit, Trash2, Eye, UserCheck, UserX } from "lucide-react"
+"use client";
+
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/data-table";
+import { UserFormModal } from "@/components/ui/user-form-modal";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Eye, Edit, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import type { User } from "@/types/user";
+import type { Column, RowAction, TableAction, PaginationInfo, TableFilters, SortConfig } from "@/types/table";
+import { getUsers, deleteUser, deleteUsers } from "@/services/user.service";
 
 export default function ManageUserPage() {
-    // Mock data for users
-    const users = [
+    const [users, setUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [pagination, setPagination] = useState<PaginationInfo>({
+        page: 1,
+        pageSize: 10,
+        total: 0,
+        totalPages: 0,
+    });
+    const [filters, setFilters] = useState<TableFilters>({
+        search: "",
+        searchColumn: "full_name",
+    });
+    const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+
+    // Modal states
+    const [userModalOpen, setUserModalOpen] = useState(false);
+    const [userModalMode, setUserModalMode] = useState<"create" | "update" | "view">("create");
+    const [selectedUser, setSelectedUser] = useState<User | undefined>();
+    const [confirmationModal, setConfirmationModal] = useState<{
+        open: boolean;
+        title: string;
+        description: string;
+        onConfirm: () => void;
+    }>({
+        open: false,
+        title: "",
+        description: "",
+        onConfirm: () => { },
+    });
+
+    const columns: Column<User>[] = [
         {
-            id: 1,
-            name: "Nguyễn Văn A",
-            email: "nguyenvana@example.com",
-            role: "Admin",
-            status: "Hoạt động",
-            joinDate: "2024-01-15",
-            eventsJoined: 5,
+            key: "avatar_image_url",
+            label: "Avatar",
+            render: (value, user) => (
+                <Avatar className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10">
+                    <AvatarImage src={value} />
+                    <AvatarFallback className="text-xs sm:text-sm">
+                        {user.full_name.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                </Avatar>
+            ),
         },
         {
-            id: 2,
-            name: "Trần Thị B",
-            email: "tranthib@example.com",
-            role: "User",
-            status: "Hoạt động",
-            joinDate: "2024-02-20",
-            eventsJoined: 3,
+            key: "full_name",
+            label: "Họ và tên",
+            sortable: true,
+            filterable: true,
         },
         {
-            id: 3,
-            name: "Lê Văn C",
-            email: "levanc@example.com",
-            role: "User",
-            status: "Bị khóa",
-            joinDate: "2024-03-10",
-            eventsJoined: 1,
+            key: "email",
+            label: "Email",
+            sortable: true,
+            filterable: true,
         },
         {
-            id: 4,
-            name: "Phạm Thị D",
-            email: "phamthid@example.com",
-            role: "Moderator",
-            status: "Hoạt động",
-            joinDate: "2024-01-05",
-            eventsJoined: 8,
+            key: "position",
+            label: "Chức vụ",
+            sortable: true,
+            filterable: true,
+            render: (value) => (
+                <Badge variant="secondary">{value}</Badge>
+            ),
         },
-    ]
+        {
+            key: "created_at",
+            label: "Ngày tham gia",
+            sortable: true,
+            render: (value) => new Date(value).toLocaleDateString('vi-VN'),
+        },
+    ];
+
+    const rowActions: RowAction<User>[] = [
+        {
+            label: "Xem chi tiết",
+            icon: <Eye className="h-4 w-4" />,
+            onClick: (user) => {
+                setSelectedUser(user);
+                setUserModalMode("view");
+                setUserModalOpen(true);
+            },
+        },
+        {
+            label: "Chỉnh sửa",
+            icon: <Edit className="h-4 w-4" />,
+            onClick: (user) => {
+                setSelectedUser(user);
+                setUserModalMode("update");
+                setUserModalOpen(true);
+            },
+        },
+        {
+            label: "Xóa",
+            icon: <Trash2 className="h-4 w-4" />,
+            variant: "destructive",
+            onClick: (user) => {
+                setConfirmationModal({
+                    open: true,
+                    title: "Xác nhận xóa người dùng",
+                    description: `Bạn có chắc chắn muốn xóa người dùng "${user.full_name}"? Hành động này không thể hoàn tác.`,
+                    onConfirm: () => handleDeleteUser(user.id),
+                });
+            },
+            confirmation: {
+                title: "Xác nhận xóa người dùng",
+                description: "Bạn có chắc chắn muốn xóa người dùng này? Hành động này không thể hoàn tác.",
+            },
+        },
+    ];
+
+    const tableActions: TableAction<User>[] = [
+        {
+            label: "Xóa nhiều",
+            icon: <Trash2 className="h-4 w-4" />,
+            variant: "destructive",
+            onClick: (selectedUsers) => {
+                setConfirmationModal({
+                    open: true,
+                    title: "Xác nhận xóa nhiều người dùng",
+                    description: `Bạn có chắc chắn muốn xóa ${selectedUsers.length} người dùng đã chọn? Hành động này không thể hoàn tác.`,
+                    onConfirm: () => handleDeleteMultipleUsers(selectedUsers.map(u => u.id)),
+                });
+            },
+        },
+    ];
+
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const response = await getUsers({
+                ...filters,
+                page: pagination.page,
+                limit: pagination.pageSize,
+                sortColumn: sortConfig?.key,
+                sortDirection: sortConfig?.direction,
+            });
+
+            setUsers(response.items);
+            setPagination(prev => ({
+                ...prev,
+                total: response.totalCount,
+                totalPages: response.totalPages,
+            }));
+        } catch (error) {
+            toast.error("Lỗi khi tải danh sách người dùng");
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeleteUser = async (userId: string) => {
+        try {
+            await deleteUser(userId);
+            toast.success("Xóa người dùng thành công");
+            fetchUsers();
+        } catch (error) {
+            toast.error("Lỗi khi xóa người dùng");
+            console.error(error);
+        }
+    };
+
+    const handleDeleteMultipleUsers = async (userIds: string[]) => {
+        try {
+            await deleteUsers(userIds);
+            toast.success(`Xóa ${userIds.length} người dùng thành công`);
+            fetchUsers();
+        } catch (error) {
+            toast.error("Lỗi khi xóa người dùng");
+            console.error(error);
+        }
+    };
+
+    const handleCreateUser = () => {
+        setSelectedUser(undefined);
+        setUserModalMode("create");
+        setUserModalOpen(true);
+    };
+
+    const handlePaginationChange = (page: number, pageSize: number) => {
+        setPagination(prev => ({ ...prev, page, pageSize }));
+    };
+
+    const handleFiltersChange = (newFilters: TableFilters) => {
+        setFilters(newFilters);
+        setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page when filtering
+    };
+
+    const handleSortChange = (newSortConfig: SortConfig | null) => {
+        setSortConfig(newSortConfig);
+    };
+
+    const handleUserFormSuccess = () => {
+        fetchUsers();
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, [pagination.page, pagination.pageSize, filters, sortConfig]);
 
     return (
         <div className="space-y-6">
@@ -52,84 +223,52 @@ export default function ManageUserPage() {
                         Quản lý tất cả người dùng trong hệ thống
                     </p>
                 </div>
-                <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Thêm người dùng mới
-                </Button>
             </div>
 
             <Card>
                 <CardHeader>
                     <CardTitle>Danh sách người dùng</CardTitle>
                     <CardDescription>
-                        Tổng cộng {users.length} người dùng
+                        Tổng cộng {pagination.total} người dùng
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b">
-                                    <th className="text-left p-2 font-medium">Tên</th>
-                                    <th className="text-left p-2 font-medium">Email</th>
-                                    <th className="text-left p-2 font-medium">Vai trò</th>
-                                    <th className="text-left p-2 font-medium">Trạng thái</th>
-                                    <th className="text-left p-2 font-medium">Ngày tham gia</th>
-                                    <th className="text-left p-2 font-medium">Sự kiện đã tham gia</th>
-                                    <th className="text-left p-2 font-medium">Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {users.map((user) => (
-                                    <tr key={user.id} className="border-b hover:bg-muted/50">
-                                        <td className="p-2 font-medium">{user.name}</td>
-                                        <td className="p-2">{user.email}</td>
-                                        <td className="p-2">
-                                            <span className={`px-2 py-1 rounded-full text-xs ${user.role === 'Admin' ? 'bg-red-100 text-red-800' :
-                                                    user.role === 'Moderator' ? 'bg-orange-100 text-orange-800' :
-                                                        'bg-blue-100 text-blue-800'
-                                                }`}>
-                                                {user.role}
-                                            </span>
-                                        </td>
-                                        <td className="p-2">
-                                            <span className={`px-2 py-1 rounded-full text-xs ${user.status === 'Hoạt động' ? 'bg-green-100 text-green-800' :
-                                                    'bg-red-100 text-red-800'
-                                                }`}>
-                                                {user.status}
-                                            </span>
-                                        </td>
-                                        <td className="p-2">{user.joinDate}</td>
-                                        <td className="p-2">{user.eventsJoined}</td>
-                                        <td className="p-2">
-                                            <div className="flex gap-2">
-                                                <Button variant="ghost" size="sm">
-                                                    <Eye className="h-4 w-4" />
-                                                </Button>
-                                                <Button variant="ghost" size="sm">
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                {user.status === 'Hoạt động' ? (
-                                                    <Button variant="ghost" size="sm">
-                                                        <UserX className="h-4 w-4" />
-                                                    </Button>
-                                                ) : (
-                                                    <Button variant="ghost" size="sm">
-                                                        <UserCheck className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                                <Button variant="ghost" size="sm">
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <DataTable
+                        data={users}
+                        columns={columns}
+                        loading={loading}
+                        pagination={pagination}
+                        onPaginationChange={handlePaginationChange}
+                        filters={filters}
+                        onFiltersChange={handleFiltersChange}
+                        sortConfig={sortConfig}
+                        onSortChange={handleSortChange}
+                        actions={tableActions}
+                        rowActions={rowActions}
+                        onCreateClick={handleCreateUser}
+                        createButtonLabel="Thêm người dùng mới"
+                    />
                 </CardContent>
             </Card>
+
+            <UserFormModal
+                open={userModalOpen}
+                onOpenChange={setUserModalOpen}
+                mode={userModalMode}
+                user={selectedUser}
+                onSuccess={handleUserFormSuccess}
+            />
+
+            <ConfirmationModal
+                open={confirmationModal.open}
+                onOpenChange={(open) => setConfirmationModal(prev => ({ ...prev, open }))}
+                title={confirmationModal.title}
+                description={confirmationModal.description}
+                onConfirm={confirmationModal.onConfirm}
+                variant="destructive"
+                confirmText="Xóa"
+                cancelText="Hủy"
+            />
         </div>
-    )
+    );
 }
